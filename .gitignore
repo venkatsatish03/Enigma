@@ -1,0 +1,14 @@
+.venv/
+data/
+logs/
+.env
+*.sqlite3
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+frontend/node_modules/
+frontend/.next/
+frontend/.next-*/
+frontend/out/
+frontend/next-env.d.ts
