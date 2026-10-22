@@ -278,6 +278,9 @@ a { color:inherit; text-decoration:none; }
 .portal-account { display:flex; align-items:center; gap:15px; margin-left:auto; color:#718187; font-size:10px; }
 .portal-account .button { min-height:33px; font-size:10px; }
 .portal-main { width:min(100% - 48px,1160px); margin:0 auto; padding:42px 0 70px; }
+.portal-page-nav { display:flex; gap:7px; margin:0 0 27px; padding-bottom:10px; border-bottom:1px solid #e3ebea; }
+.portal-page-nav a { padding:8px 12px; color:#75878b; border-radius:7px; font-size:10px; font-weight:750; }
+.portal-page-nav a:hover,.portal-page-nav .portal-page-active { color:#176f66; background:#eaf5f2; }
 .portal-content { width:100%; }
 .portal-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:26px; }
 .portal-heading h1 { margin:7px 0 7px; color:#203842; font-family:Georgia,"Times New Roman",serif; font-size:34px; font-weight:500; letter-spacing:-.04em; }
@@ -327,11 +330,43 @@ a { color:inherit; text-decoration:none; }
 .owner-listing-details strong { color:#375852; font-size:11px; }
 .owner-listing-bottom { min-height:33px; margin-top:7px; color:#91a0a4; font-size:9px; }
 .owner-listing-bottom .table-link { font-size:9px; }
+.owner-availability { display:flex; align-items:center; gap:8px; color:#819095; font-size:9px; }
+.owner-availability .select { min-height:30px; padding:0 25px 0 8px; color:#45605e; font-size:9px; }
 .owner-review-note { color:#9a7439; font-size:10px; font-weight:700; }
 .owner-review-callout { display:flex; align-items:center; gap:13px; margin-top:24px; padding:14px 17px; border:1px solid #e8efed; border-radius:10px; background:#fbfdfc; }
 .owner-review-callout .portal-icon { flex:none; width:32px; height:32px; margin:0; font-size:14px; }
 .owner-review-callout strong { color:#49605f; font-size:10px; }
 .owner-review-callout p { margin:4px 0 0; color:#8a9799; font-size:9px; line-height:1.5; }
+.portal-dashboard-grid { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(290px,.8fr); gap:15px; margin-top:15px; }
+.portal-dashboard-panel { min-width:0; padding:19px; border:1px solid #e5eceb; border-radius:11px; background:#fff; box-shadow:0 5px 20px #203f4807; }
+.portal-dashboard-panel h2 { margin:0; color:#304b53; font-size:13px; }
+.portal-dashboard-panel>p { margin:5px 0 13px; color:#87969a; font-size:10px; line-height:1.5; }
+.portal-dashboard-list { display:flex; flex-direction:column; }
+.portal-dashboard-row { display:flex; align-items:center; gap:11px; padding:11px 0; border-top:1px solid #eff3f2; }
+.portal-dashboard-row:first-child { border-top:0; }
+.portal-dashboard-row>div { min-width:0; flex:1; display:flex; flex-direction:column; gap:5px; }
+.portal-dashboard-row strong { overflow:hidden; color:#465d63; font-size:10px; text-overflow:ellipsis; }
+.portal-dashboard-row span,.portal-dashboard-row small { color:#8c9a9e; font-size:9px; line-height:1.4; }
+.portal-dashboard-row .button { flex:none; }
+.portal-dashboard-quick { display:flex; flex-wrap:wrap; gap:9px; margin:0 0 18px; }
+.portal-dashboard-quick .button { min-height:37px; }
+.portal-dashboard-empty { padding:20px 0; color:#8b999c; font-size:10px; text-align:center; }
+.portal-money-unavailable { color:#8b999c; font-family:inherit; font-size:12px; }
+.marketplace-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.marketplace-card { overflow:hidden; padding:0; }
+.marketplace-photo { width:100%; height:190px; display:block; object-fit:cover; background:#edf3f1; }
+.marketplace-photo-placeholder { height:150px; display:grid; place-items:center; color:#6d8984; background:linear-gradient(135deg,#e9f2ef,#f8fbfa); font-size:30px; }
+.marketplace-copy { padding:18px; }
+.marketplace-copy h3 { margin:0 0 5px; color:#2c454d; font-size:14px; }
+.marketplace-copy>p { margin:0; color:#849397; font-size:10px; line-height:1.6; }
+.marketplace-price { display:flex; justify-content:space-between; gap:12px; margin-top:12px; padding:11px 0; border-top:1px solid #edf1f1; border-bottom:1px solid #edf1f1; }
+.marketplace-price span { color:#809095; font-size:9px; text-transform:capitalize; }
+.marketplace-price strong { color:#375852; font-size:11px; }
+.marketplace-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; }
+.marketplace-contact { display:flex; flex-wrap:wrap; gap:13px; }
+.marketplace-request-form { display:grid; gap:9px; margin-top:12px; padding:13px; border:1px solid #e8efed; border-radius:8px; background:#fbfdfc; }
+.marketplace-request-form .textarea { min-height:65px; }
+.booking-status-note { color:#56756e; font-size:9px; font-weight:700; }
 .owner-form { display:flex; flex-direction:column; gap:14px; }
 .form-section { padding:0; overflow:hidden; }
 .form-section-head { display:flex; align-items:flex-start; gap:13px; padding:18px 21px; border-bottom:1px solid #eef2f2; background:#fcfdfd; }
@@ -378,6 +413,7 @@ a { color:inherit; text-decoration:none; }
   .portal-main { width:calc(100% - 40px); padding-top:33px; }
   .portal-request-form { grid-template-columns:1fr 1.4fr; }
   .portal-request-form>button { grid-column:2; justify-self:start; }
+  .portal-dashboard-grid,.marketplace-grid { grid-template-columns:1fr; }
 }
 @media (max-width:650px) {
   .auth-brand { top:21px; left:22px; }
@@ -417,6 +453,7 @@ a { color:inherit; text-decoration:none; }
   .portal-account { gap:0; }
   .portal-account .button { min-height:30px; padding:0 8px; font-size:9px; }
   .portal-main { width:calc(100% - 28px); padding:26px 0 45px; }
+  .portal-page-nav { margin-bottom:20px; }
   .portal-heading { align-items:flex-start; flex-direction:column; gap:13px; margin-bottom:19px; }
   .portal-heading h1 { font-size:29px; }
   .portal-heading p { font-size:11px; }
@@ -431,6 +468,7 @@ a { color:inherit; text-decoration:none; }
   .tenant-property { padding:0; }
   .portal-section-heading { align-items:flex-start; }
   .portal-section-heading .button { padding:0 9px; font-size:10px; }
+  .owner-availability { align-items:flex-end; flex-direction:column; gap:4px; }
   .portal-request-form { grid-template-columns:1fr; }
   .portal-request-form>button { grid-column:auto; }
   .portal-form-grid { grid-template-columns:1fr; gap:13px; padding:16px; }

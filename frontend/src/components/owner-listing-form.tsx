@@ -86,7 +86,7 @@ export function OwnerListingForm({ listingId }: { listingId?: string }) {
     event.preventDefault(); await saveDraft();
     // For first save, the newly created id is placed in the route; the owner can submit from the saved draft.
   }
-  async function submitForReview() {
+  async function publishListing() {
     setBusy(true); setError(""); setNotice("");
     try {
       let current = listing;
@@ -99,16 +99,16 @@ export function OwnerListingForm({ listingId }: { listingId?: string }) {
         setListing(current);
         if (files?.length) for (const file of Array.from(files)) { const form = new FormData(); form.append("file", file); await apiRequest(`/portal/owner/listings/${current.listing_id}/media?media_kind=${encodeURIComponent(mediaKind)}`, { method: "POST", body: form }); }
       }
-      const submitted = await apiRequest<ListingRecord>(`/portal/owner/listings/${current.listing_id}/submit`, { method: "POST" }); setListing(submitted); setFiles(null); setNotice("Your listing has been submitted for review.");
+      const published = await apiRequest<ListingRecord>(`/portal/owner/listings/${current.listing_id}/submit`, { method: "POST" }); setListing(published); setFiles(null); setNotice("Your listing is approved and visible to tenants.");
       if (!listingId) router.replace(`/owner/listings/${current.listing_id}`);
     } catch (reason) { setError(displayError(reason)); }
     finally { setBusy(false); }
   }
 
   if (loading) return <div className="portal-loading"><span className="spinner spinner-dark" />Loading listing details…</div>;
-  return <div className="portal-content"><div className="portal-heading"><div><div className="eyebrow">OWNER PORTAL · PROPERTY DETAILS</div><h1>{listingId ? "Edit property draft" : "Add a property"}</h1><p>Complete the details that tenants and reviewers need to understand this property.</p></div><Link className="button button-secondary" href="/owner">← Your listings</Link></div>
+  return <div className="portal-content"><div className="portal-heading"><div><div className="eyebrow">OWNER PORTAL · PROPERTY DETAILS</div><h1>{listingId ? "Edit property draft" : "Add a property"}</h1><p>Complete the details tenants need to decide whether to request a booking.</p></div><Link className="button button-secondary" href="/owner/properties">← Your properties</Link></div>
     {error && <div className="inline-error" role="alert">{error}</div>}{notice && <div className="inline-success" role="status">{notice}</div>}
-    {locked && <div className="portal-review-note">This listing has been submitted for review. Its details are read-only while it is being reviewed.</div>}
+    {locked && <div className="portal-review-note">This listing has been published. Its listing details are read-only.</div>}
     <form className="owner-form" onSubmit={submit}>
       <section className="portal-panel form-section"><div className="form-section-head"><span className="form-step">01</span><div><h2>Owner and listing information</h2><p>Tell us who is responsible for the listing and what is being offered.</p></div></div><div className="portal-form-grid">
         <label className="portal-field"><span>Listing type *</span><select className="select" value={values.listing_type} onChange={(event) => set("listing_type", event.target.value)} disabled={locked}>{listingTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
@@ -174,7 +174,7 @@ export function OwnerListingForm({ listingId }: { listingId?: string }) {
         <label className="portal-field"><span>Service charges</span><input className="input" type="number" min="0" step="0.01" value={values.service_charge} onChange={(event) => set("service_charge", event.target.value)} disabled={locked} /></label>
         <label className="portal-field portal-field-wide"><span>Other mandatory recurring costs (one per line: name: amount)</span><textarea className="textarea" rows={3} value={values.other_recurring_costs} onChange={(event) => set("other_recurring_costs", event.target.value)} disabled={locked} placeholder="Building fee: 25.00" /></label>
       </div><p className="portal-footnote">Deposit rules and occupancy terms must comply with the laws that apply in the property's location.</p></section>
-      {!locked && <div className="owner-form-actions"><span>{listing ? `Draft · ${listing.media.length} uploaded file(s)` : "Your progress is saved as a private draft."}</span><div><Link className="button button-secondary" href="/owner">Cancel</Link><button className="button button-secondary" type="button" disabled={busy} onClick={() => void saveDraft()}>{busy ? "Saving…" : "Save draft"}</button><button className="button button-primary" type="button" disabled={busy} onClick={() => void submitForReview()}>{busy ? "Submitting…" : "Submit for review"}</button></div></div>}
+      {!locked && <div className="owner-form-actions"><span>{listing ? `Draft · ${listing.media.length} uploaded file(s)` : "Your progress is saved as a private draft."}</span><div><Link className="button button-secondary" href="/owner/properties">Cancel</Link><button className="button button-secondary" type="button" disabled={busy} onClick={() => void saveDraft()}>{busy ? "Saving…" : "Save draft"}</button><button className="button button-primary" type="button" disabled={busy} onClick={() => void publishListing()}>{busy ? "Publishing…" : "Publish property"}</button></div></div>}
     </form>
   </div>;
 }

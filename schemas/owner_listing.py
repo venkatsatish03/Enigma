@@ -194,3 +194,14 @@ class OwnerListingRecord(BaseModel):
     media: list[ListingMediaRecord] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+class PublicOwnerListingRecord(BaseModel):
+    """Published listing data safe to return to authenticated tenants."""
+
+    listing_id: str
+    status: str
+    data: OwnerListingDraft
+    media: list[ListingMediaRecord] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime

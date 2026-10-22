@@ -44,6 +44,12 @@ from repository import (
     InvalidOperationError,
 )
 from repository.owner_listing_repository import OwnerListingRepository
+from schemas.booking_request import (
+    BookingRequestCreate,
+    BookingRequestDecision,
+    BookingRequestRecord,
+    OwnerListingAvailabilityUpdate,
+)
 from schemas.domain import (
     BankStatementRecord,
     BankTransactionMatchStatus,
@@ -163,7 +169,13 @@ from tools.google_oauth import (
     exchange_google_code,
     verify_google_id_token,
 )
-from schemas.owner_listing import ListingMediaRecord, OwnerListingDraft, OwnerListingRecord
+from schemas.owner_listing import (
+    ListingMediaRecord,
+    OwnerListingDraft,
+    OwnerListingRecord,
+    PropertyStatus,
+    PublicOwnerListingRecord,
+)
 from tools.financial_operations_orchestrator import (
     run_financial_operations,
 )
@@ -683,12 +695,128 @@ def create_tenant_maintenance_request(
     raise HTTPException(status_code=403, detail="The selected unit is not part of your active lease.")
 
 
+@app.get("/api/v1/portal/tenant/listings", response_model=list[PublicOwnerListingRecord])
+def list_available_tenant_listings(
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> list[PublicOwnerListingRecord]:
+    """List approved properties that are currently available to authenticated tenants."""
+    return [
+        PublicOwnerListingRecord(
+            listing_id=listing.listing_id,
+            status=listing.status,
+            data=listing.data,
+            media=listing.media,
+            created_at=listing.created_at,
+            updated_at=listing.updated_at,
+        )
+        for listing in listings.list_published()
+    ]
+
+
+@app.get("/api/v1/portal/tenant/listings/{listing_id}/media/{media_id}")
+def get_tenant_listing_media(
+    listing_id: str,
+    media_id: str,
+    current_user: User = Depends(get_current_user),
+    config: AuthConfig = Depends(get_auth_config),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> FileResponse:
+    item = listings.get_published_media(listing_id, media_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Listing media is not available.")
+    root = config.listing_media_path.resolve()
+    file_path = (root / str(item["storage_name"])).resolve()
+    if not file_path.is_relative_to(root) or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Listing media file is not available.")
+    return FileResponse(file_path, media_type=str(item["mime_type"]), filename=str(item["original_filename"]))
+
+
+@app.get("/api/v1/portal/tenant/booking-requests", response_model=list[BookingRequestRecord])
+def list_tenant_booking_requests(
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> list[BookingRequestRecord]:
+    return listings.list_booking_requests_for_tenant(current_user.user_id)
+
+
+@app.post("/api/v1/portal/tenant/booking-requests", response_model=BookingRequestRecord, status_code=201)
+def create_tenant_booking_request(
+    payload: BookingRequestCreate,
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> BookingRequestRecord:
+    request, error = listings.create_booking_request(
+        tenant_user_id=current_user.user_id,
+        tenant_email=current_user.email,
+        listing_id=payload.listing_id,
+        desired_move_in_date=payload.desired_move_in_date,
+        message=payload.message,
+    )
+    if error == "listing_unavailable":
+        raise HTTPException(status_code=409, detail="This property is no longer available for booking requests.")
+    if error == "request_already_pending":
+        raise HTTPException(status_code=409, detail="You already have a pending request for this property.")
+    if error == "cannot_request_own_listing":
+        raise HTTPException(status_code=403, detail="You cannot submit a booking request for your own property.")
+    if request is None:
+        raise HTTPException(status_code=400, detail="The booking request could not be created.")
+    return request
+
+
+@app.get("/api/v1/portal/owner/booking-requests", response_model=list[BookingRequestRecord])
+def list_owner_booking_requests(
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> list[BookingRequestRecord]:
+    return listings.list_booking_requests_for_owner(current_user.user_id)
+
+
+@app.patch("/api/v1/portal/owner/booking-requests/{request_id}", response_model=BookingRequestRecord)
+def decide_owner_booking_request(
+    request_id: str,
+    payload: BookingRequestDecision,
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> BookingRequestRecord:
+    request, error = listings.decide_booking_request(
+        owner_user_id=current_user.user_id,
+        request_id=request_id,
+        status=payload.status,
+        decision_note=payload.decision_note,
+    )
+    if error == "not_found" or request is None:
+        raise HTTPException(status_code=404, detail="Booking request not found for your properties.")
+    if error == "already_decided":
+        raise HTTPException(status_code=409, detail="This booking request has already been decided.")
+    if error == "listing_unavailable":
+        raise HTTPException(status_code=409, detail="This property is no longer available.")
+    return request
+
+
 @app.get("/api/v1/portal/owner/listings", response_model=list[OwnerListingRecord])
 def list_owner_listings(
     current_user: User = Depends(get_current_user),
     listings: OwnerListingRepository = Depends(get_owner_listing_repository),
 ) -> list[OwnerListingRecord]:
     return listings.list_for_owner(current_user.user_id)
+
+
+@app.patch("/api/v1/portal/owner/listings/{listing_id}/availability", response_model=OwnerListingRecord)
+def update_owner_listing_availability(
+    listing_id: str,
+    payload: OwnerListingAvailabilityUpdate,
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> OwnerListingRecord:
+    listing = listings.update_property_status(
+        current_user.user_id,
+        listing_id,
+        PropertyStatus(payload.property_status),
+    )
+    if not listing:
+        raise HTTPException(status_code=404, detail="Published property not found for your account.")
+    return listing
 
 
 @app.post("/api/v1/portal/owner/listings", response_model=OwnerListingRecord, status_code=201)
