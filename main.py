@@ -1,17 +1,21 @@
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+import logging
+import secrets
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
+import uuid
 
-from fastapi import Body, Depends, FastAPI, File, HTTPException, Query, Response, UploadFile
+from fastapi import Body, Cookie, Depends, FastAPI, File, HTTPException, Query, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, RedirectResponse
 
 from agents.document_agent import DocumentIntelligenceAgent, DocumentAgentResult
 
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from schemas.approvals import (
     ApprovalDecision,
@@ -39,6 +43,7 @@ from repository import (
     IntegrityConflictError,
     InvalidOperationError,
 )
+from repository.owner_listing_repository import OwnerListingRepository
 from schemas.domain import (
     BankStatementRecord,
     BankTransactionMatchStatus,
@@ -140,7 +145,8 @@ from tools.approval_workflow import (
 )
 from tools.audit_trail import AuditTrail
 from tools.auth_config import AuthConfig, get_auth_config
-from tools.auth_crypto import create_access_token, verify_password
+from tools.auth_crypto import create_access_token, hash_password, verify_password
+from tools.auth_email import AuthEmailConfigurationError, send_account_link
 from tools.auth_dependencies import (
     PropertyContext,
     get_auth_repository,
@@ -150,6 +156,14 @@ from tools.auth_dependencies import (
     require_property_permission,
 )
 from tools.auth_repository import AuthRepository
+from tools.google_oauth import (
+    GoogleOAuthError,
+    build_google_authorization_url,
+    create_pkce_pair,
+    exchange_google_code,
+    verify_google_id_token,
+)
+from schemas.owner_listing import ListingMediaRecord, OwnerListingDraft, OwnerListingRecord
 from tools.financial_operations_orchestrator import (
     run_financial_operations,
 )
@@ -196,6 +210,7 @@ DEFAULT_AUDIT_DB = DATA_DIR / "audit.sqlite3"
 DEFAULT_APPROVALS_DB = DATA_DIR / "approvals.sqlite3"
 DEFAULT_DOMAIN_DB = DATA_DIR / "domain.sqlite3"
 DEFAULT_WORKFLOWS_DB = DATA_DIR / "workflows.sqlite3"
+logger = logging.getLogger("uvicorn.error")
 
 
 def get_audit_trail() -> AuditTrail:
@@ -246,6 +261,12 @@ def get_financial_reporting_service(
     return FinancialReportingService(domain_repo)
 
 
+def get_owner_listing_repository(
+    config: AuthConfig = Depends(get_auth_config),
+) -> OwnerListingRepository:
+    return OwnerListingRepository(config.owner_listings_db_path)
+
+
 
 app = FastAPI(
     title="Enigma API",
@@ -261,6 +282,234 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok", "service": "enigma-api"}
+
+
+class GoogleExchangeRequest(BaseModel):
+    code: str = Field(min_length=24, max_length=256)
+
+
+class AccountActionRequest(BaseModel):
+    token: str = Field(min_length=24, max_length=256)
+    password: str = Field(min_length=12, max_length=256)
+
+
+class EmailAddressRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if "@" not in value or value.startswith("@") or value.endswith("@"):
+            raise ValueError("Enter a valid email address.")
+        return value
+
+
+class TenantMaintenanceRequestPayload(BaseModel):
+    property_id: str = Field(min_length=1)
+    unit_id: str = Field(min_length=1)
+    description: str = Field(min_length=3, max_length=5000)
+
+
+def _issue_token_for_user(user: User, config: AuthConfig) -> TokenResponse:
+    token, expires_in = create_access_token(
+        user_id=user.user_id,
+        email=user.email,
+        secret_key=config.secret_key,
+        expires_delta=timedelta(minutes=config.access_token_expire_minutes),
+        algorithm=config.algorithm,
+        issuer=config.issuer,
+        audience=config.audience,
+    )
+    return TokenResponse(access_token=token, expires_in=expires_in)
+
+
+def _link_verified_residents(user: User, email: str, auth_repo: AuthRepository, domain_repo: DomainRepository) -> None:
+    """Link only an unambiguous exact-email resident record in each property."""
+    matches_by_property: dict[str, list[str]] = {}
+    for property_id, resident_id in domain_repo.find_residents_by_email(email):
+        matches_by_property.setdefault(property_id, []).append(resident_id)
+    for property_id, resident_ids in matches_by_property.items():
+        if len(resident_ids) == 1:
+            auth_repo.link_resident(user_id=user.user_id, property_id=property_id, resident_id=resident_ids[0])
+
+
+def _google_callback_redirect(config: AuthConfig, path: str) -> RedirectResponse:
+    response = RedirectResponse(f"{config.frontend_base_url}{path}", status_code=303)
+    response.delete_cookie(
+        "enigma_oauth_state",
+        path="/api/backend/api/v1/auth/google/callback",
+        httponly=True,
+        secure=config.frontend_base_url.startswith("https://"),
+        samesite="lax",
+    )
+    return response
+
+
+@app.get("/api/v1/auth/google/start")
+def start_google_auth(
+    intent: Literal["login", "signup"] = Query("login"),
+    config: AuthConfig = Depends(get_auth_config),
+    auth_repo: AuthRepository = Depends(get_auth_repository),
+) -> RedirectResponse:
+    """Start a Google OIDC authorization-code flow with state, nonce, and PKCE."""
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(24)
+    verifier, challenge = create_pkce_pair()
+    try:
+        authorization_url = build_google_authorization_url(
+            config, state=state, nonce=nonce, code_challenge=challenge, intent=intent
+        )
+    except GoogleOAuthError:
+        return RedirectResponse(f"{config.frontend_base_url}/login?auth_error=google_not_configured", status_code=303)
+    auth_repo.create_oauth_state(state=state, nonce=nonce, code_verifier=verifier, intent=intent)
+    response = RedirectResponse(authorization_url, status_code=302)
+    response.set_cookie(
+        "enigma_oauth_state",
+        state,
+        max_age=600,
+        httponly=True,
+        secure=config.frontend_base_url.startswith("https://"),
+        samesite="lax",
+        path="/api/backend/api/v1/auth/google/callback",
+    )
+    return response
+
+
+@app.get("/api/v1/auth/google/callback")
+def google_auth_callback(
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None),
+    oauth_state_cookie: str | None = Cookie(None, alias="enigma_oauth_state"),
+    config: AuthConfig = Depends(get_auth_config),
+    auth_repo: AuthRepository = Depends(get_auth_repository),
+    domain_repo: DomainRepository = Depends(get_domain_repository),
+) -> RedirectResponse:
+    """Verify Google's response and return a short-lived, one-use app handoff."""
+    if error or not code or not state:
+        return _google_callback_redirect(config, "/login?auth_error=google_cancelled")
+    if not oauth_state_cookie or not secrets.compare_digest(state, oauth_state_cookie):
+        return _google_callback_redirect(config, "/login?auth_error=google_state")
+    state_data = auth_repo.consume_oauth_state(state)
+    if not state_data:
+        return _google_callback_redirect(config, "/login?auth_error=google_state")
+
+    try:
+        id_token = exchange_google_code(config, code=code, code_verifier=state_data["code_verifier"])
+        claims = verify_google_id_token(config, id_token=id_token, expected_nonce=state_data["nonce"])
+        email = str(claims["email"]).strip().lower()
+        google_sub = str(claims["sub"])
+
+        user = auth_repo.get_user_by_google_sub(google_sub)
+        if user is None:
+            existing = auth_repo.get_user_by_email(email)
+            if existing:
+                user = existing[0]
+                if not auth_repo.link_google_identity(user_id=user.user_id, google_sub=google_sub):
+                    raise GoogleOAuthError("This Google account is already linked to a different ENIGMA account.")
+                user = auth_repo.get_user_by_id(user.user_id) or user
+            else:
+                # The random hash is never disclosed; a verified Google user must set their own password.
+                user = auth_repo.create_google_user(
+                    email=email,
+                    google_sub=google_sub,
+                    password_hash=hash_password(secrets.token_urlsafe(48)),
+                )
+        if not user.is_active:
+            return _google_callback_redirect(config, "/login?auth_error=account_disabled")
+        _link_verified_residents(user, email, auth_repo, domain_repo)
+        if user.password_setup_required:
+            setup_token = auth_repo.create_action_token(
+                user_id=user.user_id, purpose="password_setup", lifetime=timedelta(minutes=30)
+            )
+            return _google_callback_redirect(config, f"/set-password#token={setup_token}")
+
+        handoff = auth_repo.create_exchange_code(user_id=user.user_id)
+        return _google_callback_redirect(config, f"/auth/google/callback#code={handoff}")
+    except GoogleOAuthError as exc:
+        cause = exc.__cause__
+        if cause is not None:
+            logger.warning(
+                "Google sign-in rejected: %s (cause: %s: %s)",
+                str(exc),
+                type(cause).__name__,
+                str(cause),
+            )
+        else:
+            logger.warning("Google sign-in rejected: %s", str(exc))
+        return _google_callback_redirect(config, "/login?auth_error=google_verification")
+    except Exception:
+        logger.exception("Google sign-in callback failed")
+        return _google_callback_redirect(config, "/login?auth_error=google_failed")
+
+
+@app.post("/api/v1/auth/google/exchange", response_model=TokenResponse)
+def exchange_google_handoff(
+    payload: GoogleExchangeRequest,
+    config: AuthConfig = Depends(get_auth_config),
+    auth_repo: AuthRepository = Depends(get_auth_repository),
+) -> TokenResponse:
+    user_id = auth_repo.consume_exchange_code(payload.code)
+    user = auth_repo.get_user_by_id(user_id) if user_id else None
+    if not user or not user.is_active or user.password_setup_required:
+        raise HTTPException(status_code=401, detail="Google sign-in could not be completed. Please try again.")
+    return _issue_token_for_user(user, config)
+
+
+@app.post("/api/v1/auth/password/setup", response_model=TokenResponse)
+def set_initial_password(
+    payload: AccountActionRequest,
+    config: AuthConfig = Depends(get_auth_config),
+    auth_repo: AuthRepository = Depends(get_auth_repository),
+) -> TokenResponse:
+    user_id = auth_repo.consume_action_token(raw_token=payload.token, purpose="password_setup")
+    user = auth_repo.get_user_by_id(user_id) if user_id else None
+    if not user or not user.is_active or not user.password_setup_required:
+        raise HTTPException(status_code=400, detail="This password setup link is invalid or expired. Sign in with Google again.")
+    auth_repo.update_user_password(user.user_id, hash_password(payload.password))
+    updated = auth_repo.get_user_by_id(user.user_id) or user
+    return _issue_token_for_user(updated, config)
+
+
+@app.post("/api/v1/auth/password/forgot", status_code=202)
+def request_password_reset(
+    payload: EmailAddressRequest,
+    config: AuthConfig = Depends(get_auth_config),
+    auth_repo: AuthRepository = Depends(get_auth_repository),
+) -> dict[str, str]:
+    user_record = auth_repo.get_user_by_email(payload.email)
+    if user_record and user_record[0].is_active:
+        user = user_record[0]
+        raw_token = auth_repo.create_action_token(
+            user_id=user.user_id, purpose="password_reset", lifetime=timedelta(minutes=30)
+        )
+        link = f"{config.frontend_base_url}/reset-password#token={raw_token}"
+        try:
+            send_account_link(
+                recipient=user.email,
+                subject="Reset your ENIGMA password",
+                heading="Password reset",
+                link=link,
+                action="Reset password",
+            )
+        except AuthEmailConfigurationError as exc:
+            logger.warning("Password reset email is unavailable because SMTP is not configured: %s", exc)
+        except Exception:
+            logger.exception("Password reset email delivery failed")
+    return {"message": "If an active account matches that email, password reset instructions will be sent."}
+
+
+@app.post("/api/v1/auth/password/reset", status_code=204)
+def reset_password(
+    payload: AccountActionRequest,
+    auth_repo: AuthRepository = Depends(get_auth_repository),
+) -> Response:
+    user_id = auth_repo.consume_action_token(raw_token=payload.token, purpose="password_reset")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="This password reset link is invalid or expired.")
+    auth_repo.update_user_password(user_id, hash_password(payload.password))
+    return Response(status_code=204)
 
 
 @app.post(
@@ -283,6 +532,12 @@ def login(
         )
 
     user, pwd_hash = user_res
+    if user.password_setup_required:
+        raise HTTPException(
+            status_code=401,
+            detail="Create your ENIGMA password from the setup link sent after Google signup.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     if not verify_password(credentials.password, pwd_hash):
         raise HTTPException(
             status_code=401,
@@ -319,6 +574,7 @@ def login(
 def get_current_user_profile(
     current_user: User = Depends(get_current_user),
     auth_repo: AuthRepository = Depends(get_auth_repository),
+    owner_listings: OwnerListingRepository = Depends(get_owner_listing_repository),
 ) -> CurrentUserResponse:
     """Return authenticated caller identity and authorized property roles."""
     memberships = auth_repo.list_memberships_for_user(current_user.user_id)
@@ -342,7 +598,221 @@ def get_current_user_profile(
         is_active=current_user.is_active,
         is_superuser=current_user.is_superuser,
         memberships=membership_infos,
+        portal_roles=["tenant", "owner"] if owner_listings.list_for_owner(current_user.user_id) else ["tenant"],
     )
+
+
+@app.get("/api/v1/portal/tenant/dashboard")
+def get_tenant_dashboard(
+    current_user: User = Depends(get_current_user),
+    auth_repo: AuthRepository = Depends(get_auth_repository),
+    domain_repo: DomainRepository = Depends(get_domain_repository),
+) -> dict[str, object]:
+    """Return only leases, charges, payments, and requests linked to this account."""
+    properties: list[dict[str, object]] = []
+    request_ids: set[str] = set()
+    links = auth_repo.list_resident_links(current_user.user_id)
+    for property_id, resident_id in links:
+        resident = domain_repo.get_resident(property_id, resident_id)
+        if not resident:
+            continue
+        property_record = domain_repo.get_property(property_id)
+        leases = domain_repo.list_leases(property_id, resident_id=resident_id, limit=1000)
+        invoices = domain_repo.list_invoices(property_id, resident_id=resident_id, limit=1000)
+        payments = domain_repo.list_payments(property_id, resident_id=resident_id, limit=1000)
+        units = []
+        maintenance_requests = []
+        for lease in leases:
+            unit = domain_repo.get_unit(property_id, lease.unit_id)
+            if unit and all(existing.unit_id != unit.unit_id for existing in units):
+                units.append(unit)
+            if unit:
+                for request in domain_repo.list_maintenance_requests(property_id, unit_id=unit.unit_id, limit=1000):
+                    if request.resident_id == resident_id and request.request_id not in request_ids:
+                        request_ids.add(request.request_id)
+                        maintenance_requests.append(request)
+        properties.append(
+            {
+                "property_id": property_id,
+                "property_name": property_record.name if property_record else property_id,
+                "resident": resident,
+                "leases": leases,
+                "units": units,
+                "invoices": invoices,
+                "payments": payments,
+                "maintenance_requests": maintenance_requests,
+            }
+        )
+    return {"properties": properties, "has_linked_resident": bool(properties)}
+
+
+@app.post("/api/v1/portal/tenant/maintenance-requests", status_code=201)
+def create_tenant_maintenance_request(
+    payload: TenantMaintenanceRequestPayload,
+    current_user: User = Depends(get_current_user),
+    auth_repo: AuthRepository = Depends(get_auth_repository),
+    domain_repo: DomainRepository = Depends(get_domain_repository),
+) -> object:
+    """A tenant may submit a request only for a unit in their active lease."""
+    resident_ids = [
+        resident_id
+        for property_id, resident_id in auth_repo.list_resident_links(current_user.user_id)
+        if property_id == payload.property_id
+    ]
+    if not resident_ids:
+        raise HTTPException(status_code=403, detail="Your account is not linked to a resident record at this property.")
+    for resident_id in resident_ids:
+        active_leases = domain_repo.list_leases(
+            payload.property_id,
+            status=LeaseStatus.ACTIVE,
+            resident_id=resident_id,
+            limit=1000,
+        )
+        if any(lease.unit_id == payload.unit_id for lease in active_leases):
+            try:
+                return domain_repo.create_maintenance_request(
+                    payload.property_id,
+                    MaintenanceRequestCreate(
+                        unit_id=payload.unit_id,
+                        resident_id=resident_id,
+                        description=payload.description,
+                    ),
+                )
+            except (EntityNotFoundError, CrossPropertyReferenceError) as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+    raise HTTPException(status_code=403, detail="The selected unit is not part of your active lease.")
+
+
+@app.get("/api/v1/portal/owner/listings", response_model=list[OwnerListingRecord])
+def list_owner_listings(
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> list[OwnerListingRecord]:
+    return listings.list_for_owner(current_user.user_id)
+
+
+@app.post("/api/v1/portal/owner/listings", response_model=OwnerListingRecord, status_code=201)
+def create_owner_listing(
+    payload: OwnerListingDraft,
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> OwnerListingRecord:
+    return listings.create(current_user.user_id, payload)
+
+
+@app.get("/api/v1/portal/owner/listings/{listing_id}", response_model=OwnerListingRecord)
+def get_owner_listing(
+    listing_id: str,
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> OwnerListingRecord:
+    listing = listings.get(current_user.user_id, listing_id)
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+    return listing
+
+
+@app.put("/api/v1/portal/owner/listings/{listing_id}", response_model=OwnerListingRecord)
+def update_owner_listing(
+    listing_id: str,
+    payload: OwnerListingDraft,
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> OwnerListingRecord:
+    listing = listings.update(current_user.user_id, listing_id, payload)
+    if not listing:
+        raise HTTPException(status_code=404, detail="Draft listing not found or it is no longer editable.")
+    return listing
+
+
+@app.post("/api/v1/portal/owner/listings/{listing_id}/submit", response_model=OwnerListingRecord)
+def submit_owner_listing(
+    listing_id: str,
+    current_user: User = Depends(get_current_user),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> OwnerListingRecord:
+    listing, errors = listings.submit(current_user.user_id, listing_id)
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+    if errors:
+        raise HTTPException(status_code=422, detail={"message": "Complete the required listing details before submitting.", "errors": errors})
+    return listing
+
+
+@app.post("/api/v1/portal/owner/listings/{listing_id}/media", response_model=ListingMediaRecord, status_code=201)
+async def upload_owner_listing_media(
+    listing_id: str,
+    file: UploadFile = File(...),
+    media_kind: str = Query("front_exterior"),
+    current_user: User = Depends(get_current_user),
+    config: AuthConfig = Depends(get_auth_config),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> ListingMediaRecord:
+    listing = listings.get(current_user.user_id, listing_id)
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+    allowed_kinds = {
+        "front_exterior", "entrance", "living_room", "common_area", "kitchen", "bathroom",
+        "bedroom", "garden", "balcony", "parking", "shared_amenity", "floor_plan", "video_walkthrough",
+    }
+    if media_kind not in allowed_kinds:
+        raise HTTPException(status_code=422, detail="Unsupported media category.")
+    mime = (file.content_type or "").lower()
+    if media_kind == "video_walkthrough":
+        allowed_mimes = {"video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov"}
+        maximum_bytes = 50 * 1024 * 1024
+    elif media_kind == "floor_plan":
+        allowed_mimes = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "application/pdf": ".pdf"}
+        maximum_bytes = 15 * 1024 * 1024
+    else:
+        allowed_mimes = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+        maximum_bytes = 15 * 1024 * 1024
+    if mime not in allowed_mimes:
+        raise HTTPException(status_code=415, detail="Upload a supported image, floor plan PDF, or video file.")
+    content = await file.read(maximum_bytes + 1)
+    if len(content) > maximum_bytes:
+        raise HTTPException(status_code=413, detail="The uploaded file exceeds the size limit for this media type.")
+
+    media_id = str(uuid.uuid4())
+    storage_name = f"{media_id}{allowed_mimes[mime]}"
+    directory = (config.listing_media_path / listing_id).resolve()
+    root = config.listing_media_path.resolve()
+    if not directory.is_relative_to(root):
+        raise HTTPException(status_code=400, detail="Invalid media destination.")
+    directory.mkdir(parents=True, exist_ok=True)
+    stored_path = directory / storage_name
+    stored_path.write_bytes(content)
+    record = listings.add_media(
+        owner_user_id=current_user.user_id,
+        listing_id=listing_id,
+        original_filename=Path(file.filename or "upload").name[:255],
+        storage_name=f"{listing_id}/{storage_name}",
+        media_kind=media_kind,
+        mime_type=mime,
+        size_bytes=len(content),
+    )
+    if not record:
+        stored_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=404, detail="Listing not found.")
+    return record
+
+
+@app.get("/api/v1/portal/owner/listings/{listing_id}/media/{media_id}")
+def get_owner_listing_media(
+    listing_id: str,
+    media_id: str,
+    current_user: User = Depends(get_current_user),
+    config: AuthConfig = Depends(get_auth_config),
+    listings: OwnerListingRepository = Depends(get_owner_listing_repository),
+) -> FileResponse:
+    item = listings.get_media(current_user.user_id, listing_id, media_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Listing media not found.")
+    root = config.listing_media_path.resolve()
+    file_path = (root / str(item["storage_name"])).resolve()
+    if not file_path.is_relative_to(root) or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Listing media file is not available.")
+    return FileResponse(file_path, media_type=str(item["mime_type"]), filename=str(item["original_filename"]))
 
 
 @app.post(

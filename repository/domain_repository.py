@@ -900,6 +900,16 @@ class DomainRepository:
             ).fetchall()
         return [self._row_to_resident(r) for r in rows]
 
+    def find_residents_by_email(self, email: str) -> list[tuple[str, str]]:
+        """Return exact normalized email matches as (property_id, resident_id)."""
+        normalized = email.strip().lower()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT property_id, resident_id FROM residents WHERE lower(email) = ? ORDER BY property_id, resident_id",
+                (normalized,),
+            ).fetchall()
+        return [(row["property_id"], row["resident_id"]) for row in rows]
+
     def update_resident(
         self,
         property_id: str,

@@ -66,7 +66,29 @@ ENIGMA_JWT_ISSUER=enigma-api
 ENIGMA_AUTH_DB=data/auth.sqlite3
 ENIGMA_DOMAIN_DB=data/domain.sqlite3
 ENIGMA_WORKFLOWS_DB=data/workflows.sqlite3
+
+# Required for Google verified sign-up and sign-in; register the callback URL below.
+ENIGMA_GOOGLE_CLIENT_ID=your-google-oauth-client-id
+ENIGMA_GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+ENIGMA_GOOGLE_REDIRECT_URI=http://localhost:3000/api/backend/api/v1/auth/google/callback
+ENIGMA_FRONTEND_BASE_URL=http://localhost:3000
+
+# Required for forgot-password email delivery.
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM_EMAIL=accounts@example.com
+SMTP_USE_TLS=true
 ```
+
+The OAuth redirect URI must exactly match the URL registered for the Google OAuth client. For local development, register `http://localhost:3000/api/backend/api/v1/auth/google/callback`. Google sign-in is completed by the backend, which validates the signed identity token and verified email before creating or linking an account. New Google accounts set an ENIGMA password immediately after verification. Password reset links are one-use and expire after 30 minutes; configure SMTP for their delivery.
+
+### Tenant and owner portals
+
+Newly registered and resident-only accounts open the tenant portal by default at `/tenant`. Tenant records are linked to a verified Google email only when it matches one unambiguous resident record for a property. Tenants can view linked leases, invoices, payments, and maintenance requests, and submit a maintenance request for an active lease unit.
+
+The tenant portal includes an **Owner portal** switch. A first-time owner starts with a property listing wizard at `/owner/new`, saves a draft, uploads property photographs, floor plans, or a walkthrough video, then submits the listing for review. Submitted listings are kept in a separate owner listing database and their media is stored in `data/listing_media`; configure `ENIGMA_OWNER_LISTINGS_DB` and `ENIGMA_LISTING_MEDIA_DIR` to change those paths. The existing role-scoped admin workspace remains available at `/dashboard`.
 
 ---
 

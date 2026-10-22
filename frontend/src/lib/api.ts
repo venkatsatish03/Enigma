@@ -75,6 +75,14 @@ export function getProfile() {
   return apiRequest<UserProfile>("/auth/me");
 }
 
+export function defaultLanding(profile: UserProfile) {
+  const workspaceMemberships = profile.memberships.filter((membership) => membership.role !== "resident");
+  if (!workspaceMemberships.length) return "/tenant";
+  const activeProperty = readPropertyId();
+  if (workspaceMemberships.length > 1 && !workspaceMemberships.some((membership) => membership.property_id === activeProperty)) return "/select-property";
+  return "/dashboard";
+}
+
 export function propertyPath(path: string, propertyId = readPropertyId()) {
   if (!propertyId) throw new Error("Choose an active property first.");
   return `/properties/${encodeURIComponent(propertyId)}${path.startsWith("/") ? path : `/${path}`}`;

@@ -12,8 +12,11 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!ready) return;
     if (!profile) router.replace("/login");
-    else if (profile.memberships.length > 1 && !propertyId) router.replace("/select-property");
-    else if (!profile.memberships.length) router.replace("/select-property");
+    else {
+      const workspaceMemberships = profile.memberships.filter((membership) => membership.role !== "resident");
+      if (!workspaceMemberships.length) router.replace("/tenant");
+      else if (workspaceMemberships.length > 1 && !workspaceMemberships.some((membership) => membership.property_id === propertyId)) router.replace("/select-property");
+    }
   }, [ready, profile, propertyId, router]);
 
   if (!ready || !profile || !propertyId) return <div className="center-loading"><span className="spinner spinner-dark" />Loading your workspace…</div>;

@@ -6,7 +6,8 @@ import type { Membership, SessionState, UserProfile } from "@/types";
 
 type SessionContextValue = SessionState & {
   activeMembership: Membership | null;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<UserProfile>;
+  completeSignIn: (token: string) => Promise<UserProfile>;
   signOut: () => void;
   selectProperty: (propertyId: string) => void;
   refreshProfile: () => Promise<UserProfile>;
@@ -19,8 +20,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const applyProfile = useCallback((profile: UserProfile, token: string) => {
     const storedProperty = readPropertyId();
-    let propertyId = profile.memberships.some((membership) => membership.property_id === storedProperty) ? storedProperty : null;
-    if (!propertyId && profile.memberships.length === 1) propertyId = profile.memberships[0].property_id;
+    const workspaceMemberships = profile.memberships.filter((membership) => membership.role !== "resident");
+    let propertyId = workspaceMemberships.some((membership) => membership.property_id === storedProperty) ? storedProperty : null;
+    if (!propertyId && workspaceMemberships.length === 1) propertyId = workspaceMemberships[0].property_id;
     savePropertyId(propertyId);
     setState({ token, profile, propertyId, ready: true });
   }, []);
@@ -52,6 +54,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const result = await requestSignIn(email, password);
     const profile = await getProfile();
     applyProfile(profile, result.access_token);
+    return profile;
+  }, [applyProfile]);
+
+  const completeSignIn = useCallback(async (token: string) => {
+    saveToken(token);
+    const profile = await getProfile();
+    applyProfile(profile, token);
+    return profile;
   }, [applyProfile]);
 
   const signOut = useCallback(() => {
@@ -66,7 +76,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const activeMembership = state.profile?.memberships.find((membership) => membership.property_id === state.propertyId) ?? null;
-  const value = useMemo(() => ({ ...state, activeMembership, signIn, signOut, selectProperty, refreshProfile }), [state, activeMembership, signIn, signOut, selectProperty, refreshProfile]);
+  const value = useMemo(() => ({ ...state, activeMembership, signIn, completeSignIn, signOut, selectProperty, refreshProfile }), [state, activeMembership, signIn, completeSignIn, signOut, selectProperty, refreshProfile]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 

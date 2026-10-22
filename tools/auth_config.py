@@ -26,6 +26,12 @@ class AuthConfig:
     auth_db_path: Path = PROJECT_ROOT / "data" / "auth.sqlite3"
     domain_db_path: Path = PROJECT_ROOT / "data" / "domain.sqlite3"
     workflows_db_path: Path = PROJECT_ROOT / "data" / "workflows.sqlite3"
+    owner_listings_db_path: Path = PROJECT_ROOT / "data" / "owner_listings.sqlite3"
+    listing_media_path: Path = PROJECT_ROOT / "data" / "listing_media"
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_redirect_uri: str | None = None
+    frontend_base_url: str = "http://localhost:3000"
 
 
 def get_auth_config() -> AuthConfig:
@@ -99,6 +105,16 @@ def get_auth_config() -> AuthConfig:
     if not workflows_db_path.is_absolute():
         workflows_db_path = PROJECT_ROOT / workflows_db_path
 
+    raw_listings_db_path = os.getenv("ENIGMA_OWNER_LISTINGS_DB", "data/owner_listings.sqlite3").strip()
+    owner_listings_db_path = Path(raw_listings_db_path)
+    if not owner_listings_db_path.is_absolute():
+        owner_listings_db_path = PROJECT_ROOT / owner_listings_db_path
+
+    raw_media_path = os.getenv("ENIGMA_LISTING_MEDIA_DIR", "data/listing_media").strip()
+    listing_media_path = Path(raw_media_path)
+    if not listing_media_path.is_absolute():
+        listing_media_path = PROJECT_ROOT / listing_media_path
+
     return AuthConfig(
         secret_key=secret_key,
         algorithm=algorithm,
@@ -108,4 +124,10 @@ def get_auth_config() -> AuthConfig:
         auth_db_path=db_path,
         domain_db_path=domain_db_path,
         workflows_db_path=workflows_db_path,
+        owner_listings_db_path=owner_listings_db_path,
+        listing_media_path=listing_media_path,
+        google_client_id=os.getenv("ENIGMA_GOOGLE_CLIENT_ID") or None,
+        google_client_secret=os.getenv("ENIGMA_GOOGLE_CLIENT_SECRET") or None,
+        google_redirect_uri=os.getenv("ENIGMA_GOOGLE_REDIRECT_URI") or None,
+        frontend_base_url=(os.getenv("ENIGMA_FRONTEND_BASE_URL") or "http://localhost:3000").rstrip("/"),
     )

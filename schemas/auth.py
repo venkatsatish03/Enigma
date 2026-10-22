@@ -58,11 +58,9 @@ ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
             Permission.APPROVALS_READ,
         }
     ),
-    UserRole.RESIDENT: frozenset(
-        {
-            Permission.RESIDENT_READ,
-        }
-    ),
+    # Resident users use self-scoped tenant portal endpoints. They must not
+    # receive property-wide resident list access through this management API.
+    UserRole.RESIDENT: frozenset(),
 }
 
 
@@ -73,6 +71,9 @@ class User(BaseModel):
     email: str
     is_active: bool = True
     is_superuser: bool = False
+    google_sub: str | None = None
+    google_email_verified: bool = False
+    password_setup_required: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -127,3 +128,4 @@ class CurrentUserResponse(BaseModel):
     is_active: bool
     is_superuser: bool = False
     memberships: list[UserMembershipInfo] = Field(default_factory=list)
+    portal_roles: list[str] = Field(default_factory=lambda: ["tenant"])

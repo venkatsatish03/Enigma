@@ -19,9 +19,15 @@ Next.js App Router UI built with React, TypeScript, and Tailwind CSS. It uses th
    npm run dev
    ```
 
-4. Open `http://localhost:3000` and sign in with an account created by the backend bootstrap tool.
+4. Open `http://localhost:3000`. Administrators can sign in with their bootstrapped email and password. Resident and owner accounts use the customer portals.
 
 The Next.js route handler at `/api/backend/*` proxies requests to FastAPI so the browser uses a same-origin URL and does not require a backend CORS change. The bearer token is held in session storage and cleared when the user signs out or the API rejects the session.
+
+## Google sign-in and customer portals
+
+Set `ENIGMA_GOOGLE_CLIENT_ID`, `ENIGMA_GOOGLE_CLIENT_SECRET`, and `ENIGMA_GOOGLE_REDIRECT_URI` in the backend `.env`. Register the exact callback URI `http://localhost:3000/api/backend/api/v1/auth/google/callback` with the Google OAuth client for local development, and set `ENIGMA_FRONTEND_BASE_URL=http://localhost:3000`. New accounts use Google sign-up, verify the Google identity, and set an ENIGMA password before proceeding. Configure SMTP in the backend environment for forgot-password emails.
+
+Resident-only accounts open `/tenant` by default. Tenant records are linked only when the verified Google email matches a unique resident record. The tenant dashboard shows linked tenancy and charges and allows maintenance requests for active leased units. Use the **Owner** portal switch to start the first property listing; owners can save drafts, upload photographs/floor plans/videos, and submit listings for review. Owner listing data and media storage paths can be configured with `ENIGMA_OWNER_LISTINGS_DB` and `ENIGMA_LISTING_MEDIA_DIR`.
 
 ## Implemented screens
 

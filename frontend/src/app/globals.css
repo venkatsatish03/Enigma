@@ -255,6 +255,108 @@ a { color:inherit; text-decoration:none; }
 .context-key { color:#8e9b9f; font-size:8px; text-transform:uppercase; }
 .context-value { margin-top:3px; color:#455c64; font-size:10px; font-weight:650; overflow-wrap:anywhere; }
 
+/* Email and Google sign-in */
+.auth-link { color:#14776d; font-weight:700; text-decoration:none; }
+.auth-link:hover { color:#075f5a; text-decoration:underline; }
+.auth-divider { display:flex; align-items:center; gap:12px; margin-top:20px; color:#9aa6a9; font-size:9px; font-weight:750; letter-spacing:.12em; }
+.auth-divider::before, .auth-divider::after { height:1px; flex:1; background:#e9eeee; content:""; }
+.auth-divider span { padding:0 3px; }
+.button-google { color:#354a53; border-color:#dfe6e7; background:#fff; }
+.button-google:hover { border-color:#b9c9cb; background:#fbfdfd; }
+.google-mark { font-family:Arial,sans-serif; font-size:16px; font-weight:800; background:conic-gradient(from -45deg,#4285f4 0 25%,#34a853 25% 50%,#fbbc05 50% 75%,#ea4335 75%); color:transparent; background-clip:text; }
+.auth-signup { margin:21px 0 0 !important; color:#7a898e; text-align:center; font-size:11px !important; }
+.auth-label-spaced { display:block; margin-top:17px; }
+
+/* Tenant and owner portals */
+.portal-frame { min-height:100vh; background:#f5f8f7; }
+.portal-header { min-height:72px; display:flex; align-items:center; gap:42px; padding:0 max(28px,calc((100vw - 1220px)/2)); border-bottom:1px solid #e3ebea; background:#fff; }
+.portal-brand { flex:none; color:#173b42; }
+.portal-nav { display:flex; align-self:stretch; align-items:stretch; gap:24px; }
+.portal-nav a { position:relative; display:flex; align-items:center; padding:0 4px; color:#74858a; font-size:12px; font-weight:700; }
+.portal-nav a:hover,.portal-nav .portal-nav-active { color:#146f66; }
+.portal-nav .portal-nav-active::after { position:absolute; right:0; bottom:-1px; left:0; height:2px; background:#168275; content:""; }
+.portal-account { display:flex; align-items:center; gap:15px; margin-left:auto; color:#718187; font-size:10px; }
+.portal-account .button { min-height:33px; font-size:10px; }
+.portal-main { width:min(100% - 48px,1160px); margin:0 auto; padding:42px 0 70px; }
+.portal-content { width:100%; }
+.portal-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; margin-bottom:26px; }
+.portal-heading h1 { margin:7px 0 7px; color:#203842; font-family:Georgia,"Times New Roman",serif; font-size:34px; font-weight:500; letter-spacing:-.04em; }
+.portal-heading p { margin:0; color:#79898e; font-size:12px; line-height:1.6; }
+.portal-panel { min-width:0; padding:22px; border:1px solid #e5eceb; border-radius:12px; background:#fff; box-shadow:0 5px 20px #203f4807; }
+.portal-empty { max-width:690px; margin:58px auto 0; padding:48px 42px; text-align:center; }
+.portal-empty h2 { margin:12px 0 9px; color:#243d45; font-family:Georgia,serif; font-size:25px; font-weight:500; }
+.portal-empty p { max-width:490px; margin:0 auto 20px; color:#7d8c91; font-size:12px; line-height:1.75; }
+.portal-icon { width:42px; height:42px; display:grid; place-items:center; margin:0 auto 15px; color:#267a70; border-radius:12px; background:#eaf5f2; font-size:20px; }
+.portal-loading { display:flex; align-items:center; justify-content:center; gap:10px; min-height:170px; color:#718287; font-size:12px; }
+.portal-section-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:28px 0 15px; }
+.portal-section-heading h2 { margin:4px 0 0; color:#29434b; font-size:17px; font-weight:700; }
+.portal-section-heading .button { flex:none; }
+.tenant-property { margin-top:16px; padding:0; }
+.tenant-property>.portal-section-heading { margin:0; padding:20px 23px; border-bottom:1px solid #edf1f1; }
+.tenant-property>.portal-section-heading .section-eyebrow { font-size:8px; }
+.tenant-property>.portal-stat-grid,.tenant-property>.portal-grid-two { margin-right:22px; margin-left:22px; }
+.portal-stat-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:18px; }
+.portal-stat { min-height:78px; display:flex; flex-direction:column; justify-content:center; gap:7px; padding:13px 15px; border:1px solid #e9efee; border-radius:9px; background:#fbfdfc; }
+.portal-stat span { color:#829095; font-size:10px; }
+.portal-stat strong { color:#2a4a4c; font-family:Georgia,serif; font-size:23px; font-weight:500; }
+.portal-grid-two { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; margin-top:15px; margin-bottom:18px; }
+.portal-subpanel { min-width:0; padding:16px; border:1px solid #edf1f1; border-radius:9px; background:#fff; }
+.portal-subpanel h3 { margin:0 0 11px; color:#40575f; font-size:12px; }
+.portal-muted { color:#88969a; font-size:11px; line-height:1.7; }
+.portal-record { min-height:48px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-top:1px solid #f0f3f3; }
+.portal-record>div:first-child { min-width:0; display:flex; flex-direction:column; gap:5px; }
+.portal-record strong { overflow:hidden; color:#455b62; font-size:10px; text-overflow:ellipsis; }
+.portal-record span { color:#92a0a3; font-size:9px; }
+.portal-record>b,.portal-record-end>b { flex:none; color:#38544f; font-size:10px; }
+.portal-record-end { display:flex; align-items:flex-end; flex-direction:column; gap:5px; }
+.portal-lower-grid { padding-bottom:22px; }
+.request-panel { margin-top:20px; }
+.request-panel>.portal-section-heading { margin:0 0 15px; }
+.portal-request-form { display:grid; grid-template-columns:minmax(230px,.8fr) minmax(300px,1.5fr) auto; align-items:end; gap:12px; }
+.portal-request-description textarea { min-height:43px; }
+.portal-field { min-width:0; display:flex; flex-direction:column; gap:7px; color:#4c6269; font-size:10px; font-weight:700; }
+.portal-field .input,.portal-field .select,.portal-field .textarea { font-size:11px; font-weight:400; }
+.owner-listing-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.owner-listing-card { padding:19px; }
+.owner-listing-top,.owner-listing-bottom,.owner-listing-details { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.owner-listing-top>.muted { font-size:9px; }
+.owner-listing-card h3 { margin:17px 0 5px; color:#2c454d; font-size:15px; }
+.owner-listing-card>p { margin:0; color:#819095; font-size:10px; }
+.owner-listing-details { margin-top:17px; padding:12px 0; border-top:1px solid #edf1f1; border-bottom:1px solid #edf1f1; }
+.owner-listing-details span { color:#829196; font-size:10px; text-transform:capitalize; }
+.owner-listing-details strong { color:#375852; font-size:11px; }
+.owner-listing-bottom { min-height:33px; margin-top:7px; color:#91a0a4; font-size:9px; }
+.owner-listing-bottom .table-link { font-size:9px; }
+.owner-review-note { color:#9a7439; font-size:10px; font-weight:700; }
+.owner-review-callout { display:flex; align-items:center; gap:13px; margin-top:24px; padding:14px 17px; border:1px solid #e8efed; border-radius:10px; background:#fbfdfc; }
+.owner-review-callout .portal-icon { flex:none; width:32px; height:32px; margin:0; font-size:14px; }
+.owner-review-callout strong { color:#49605f; font-size:10px; }
+.owner-review-callout p { margin:4px 0 0; color:#8a9799; font-size:9px; line-height:1.5; }
+.owner-form { display:flex; flex-direction:column; gap:14px; }
+.form-section { padding:0; overflow:hidden; }
+.form-section-head { display:flex; align-items:flex-start; gap:13px; padding:18px 21px; border-bottom:1px solid #eef2f2; background:#fcfdfd; }
+.form-step { display:grid; place-items:center; width:27px; height:27px; flex:none; color:#29796f; border-radius:8px; background:#e8f4f1; font-size:9px; font-weight:800; }
+.form-section-head h2 { margin:1px 0 4px; color:#344d55; font-size:13px; }
+.form-section-head p { margin:0; color:#8b989c; font-size:10px; line-height:1.5; }
+.portal-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px; padding:19px 21px 22px; }
+.portal-form-grid .input,.portal-form-grid .select { min-height:40px; }
+.portal-form-grid .textarea { min-height:95px; }
+.portal-field-wide { grid-column:1/-1; }
+.inline-inputs { display:flex; gap:8px; }
+.inline-inputs>.input { flex:1; min-width:0; }
+.inline-inputs>.select { width:105px; }
+.upload-grid { align-items:end; }
+.file-input { padding:7px 9px !important; }
+.media-chip-list { display:flex; flex-wrap:wrap; gap:8px; padding:17px 21px 0; }
+.media-chip { max-width:100%; overflow:hidden; padding:7px 9px; color:#56746e; border:1px solid #e0ece8; border-radius:7px; background:#f8fcfa; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.form-section>.portal-muted { margin:17px 21px 0; }
+.portal-footnote { margin:0; padding:0 21px 20px; color:#98a3a5; font-size:9px; line-height:1.5; }
+.owner-form-actions { position:sticky; bottom:0; display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:3px; padding:13px 15px; border:1px solid #e4ecea; border-radius:10px; background:#fffffff2; box-shadow:0 -5px 20px #24433d0b; backdrop-filter:blur(9px); }
+.owner-form-actions>span { color:#859397; font-size:9px; }
+.owner-form-actions>div { display:flex; gap:8px; }
+.owner-form-actions .button { min-height:36px; }
+.portal-review-note { margin-bottom:15px; padding:12px 14px; color:#8b6733; border:1px solid #efe3c8; border-radius:8px; background:#fffaf0; font-size:11px; }
+
 @media (max-width:1150px) {
   .page-content { padding-right:23px; padding-left:23px; }
   .topbar { padding-right:23px; padding-left:23px; }
@@ -271,6 +373,11 @@ a { color:inherit; text-decoration:none; }
   .main-column { width:100%; margin-left:0; }
   .topbar { gap:10px; }
   .top-search { width:min(32vw,245px); }
+  .portal-header { gap:25px; padding-right:20px; padding-left:20px; }
+  .portal-account>span { display:none; }
+  .portal-main { width:calc(100% - 40px); padding-top:33px; }
+  .portal-request-form { grid-template-columns:1fr 1.4fr; }
+  .portal-request-form>button { grid-column:2; justify-self:start; }
 }
 @media (max-width:650px) {
   .auth-brand { top:21px; left:22px; }
@@ -302,4 +409,37 @@ a { color:inherit; text-decoration:none; }
   .toolbar .input, .toolbar .select { flex:1; min-width:100px; }
   .metric-card { min-height:98px; }
   .metric-value { font-size:22px; }
+  .portal-header { min-height:63px; gap:14px; padding:0 13px; }
+  .portal-brand { gap:7px; font-size:10px; }
+  .portal-brand .brand-mark { width:28px; height:28px; }
+  .portal-nav { gap:11px; }
+  .portal-nav a { font-size:10px; }
+  .portal-account { gap:0; }
+  .portal-account .button { min-height:30px; padding:0 8px; font-size:9px; }
+  .portal-main { width:calc(100% - 28px); padding:26px 0 45px; }
+  .portal-heading { align-items:flex-start; flex-direction:column; gap:13px; margin-bottom:19px; }
+  .portal-heading h1 { font-size:29px; }
+  .portal-heading p { font-size:11px; }
+  .portal-empty { margin-top:32px; padding:34px 20px; }
+  .portal-stat-grid { grid-template-columns:1fr; gap:8px; }
+  .portal-stat { min-height:65px; }
+  .portal-grid-two,.owner-listing-grid { grid-template-columns:1fr; }
+  .tenant-property>.portal-stat-grid,.tenant-property>.portal-grid-two { margin-right:13px; margin-left:13px; }
+  .tenant-property>.portal-section-heading { padding:16px 14px; }
+  .tenant-property>.portal-section-heading .status-badge { max-width:116px; }
+  .portal-panel { padding:17px; }
+  .tenant-property { padding:0; }
+  .portal-section-heading { align-items:flex-start; }
+  .portal-section-heading .button { padding:0 9px; font-size:10px; }
+  .portal-request-form { grid-template-columns:1fr; }
+  .portal-request-form>button { grid-column:auto; }
+  .portal-form-grid { grid-template-columns:1fr; gap:13px; padding:16px; }
+  .portal-field-wide { grid-column:auto; }
+  .form-section-head { padding:15px 16px; }
+  .owner-form-actions { align-items:stretch; flex-direction:column; }
+  .owner-form-actions>div { display:grid; grid-template-columns:1fr 1fr; }
+  .owner-form-actions>div .button-primary { grid-column:1/-1; grid-row:1; }
+  .owner-form-actions>div .button-secondary:last-of-type { grid-column:2; grid-row:2; }
+  .owner-form-actions>div a { grid-column:1; grid-row:2; }
+  .owner-review-callout { align-items:flex-start; }
 }

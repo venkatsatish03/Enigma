@@ -11,6 +11,7 @@ export type UserProfile = {
   is_active: boolean;
   is_superuser: boolean;
   memberships: Membership[];
+  portal_roles: string[];
 };
 
 export type SessionState = {
